@@ -1,0 +1,9 @@
+flowchart TD
+    A[Utilisateur clique sur\n'Se connecter'] --> B[AuthService.login]
+    B --> C["POST /api/auth/login\n{email, password}"]
+    C --> D{Vérification MongoDB}
+    D -->|Échec| E["401\n{message: 'Identifiants incorrects'}"]
+    E --> F[LoginPageComponent\nAuthError + affichage du message]
+    D -->|OK| G["200\n{token, user{...}}"]
+    G --> H[AuthService stocke\nle token et les infos user]
+    H --> I[Redirection vers /tracks]
