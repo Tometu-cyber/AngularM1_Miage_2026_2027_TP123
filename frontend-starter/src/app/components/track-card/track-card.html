@@ -1,0 +1,22 @@
+<article class="track-card" [class.playing]="playing()" [attr.aria-current]="playing() ? 'true' : null">
+  <div class="body">
+    <h3>{{ track().title }}</h3>
+    <p class="original" [title]="track().originalName">{{ track().originalName }}</p>
+    <dl>
+      <div><dt>Format</dt><dd><span class="badge">{{ format() }}</span></dd></div>
+      <div><dt>Taille</dt><dd>{{ size() }}</dd></div>
+      <div>
+        <dt>Ajoutée le</dt>
+        <dd><time [attr.datetime]="track().createdAt">{{ track().createdAt | date: 'dd/MM/yyyy HH:mm' }}</time></dd>
+      </div>
+    </dl>
+  </div>
+  <button
+    type="button"
+    (click)="play.emit(track())"
+    [disabled]="busy()"
+    [attr.aria-label]="(playing() ? 'Relancer ' : 'Lire ') + track().title"
+  >
+    {{ busy() ? '…' : playing() ? '↻ En cours' : '▶ Lire' }}
+  </button>
+</article>
