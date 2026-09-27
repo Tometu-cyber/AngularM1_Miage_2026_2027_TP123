@@ -1,0 +1,55 @@
+:host { display: block; }
+
+.track-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.8rem;
+  height: 100%;
+  padding: 1rem;
+  border: 1px solid #e1ebe7;
+  border-radius: 12px;
+  background: #fbfdfc;
+}
+
+.track-card.playing {
+  border-color: #1d755e;
+  box-shadow: 0 0 0 2px #1d755e33;
+}
+
+h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.original {
+  margin: 0.2rem 0 0.6rem;
+  color: #61756f;
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+dl {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+dl div { display: flex; justify-content: space-between; gap: 0.5rem; }
+dt { color: #61756f; }
+dd { margin: 0; }
+
+.badge {
+  padding: 0.1rem 0.45rem;
+  color: #123d32;
+  background: #dcece6;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+button:focus-visible { outline: 3px solid #123d32; outline-offset: 2px; }

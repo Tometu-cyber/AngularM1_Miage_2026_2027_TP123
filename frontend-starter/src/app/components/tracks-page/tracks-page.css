@@ -1,1 +1,18 @@
 :host { display: block; }
+
+.hint { margin: -0.4rem 0 0.8rem; color: #61756f; font-size: 0.85rem; }
+.success { color: #1d6b3a; }
+
+.player { margin: 0.5rem 0 1rem; }
+.now-playing { margin: 0 0 0.4rem; }
+
+.track-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.8rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.empty { grid-column: 1 / -1; color: #61756f; }
