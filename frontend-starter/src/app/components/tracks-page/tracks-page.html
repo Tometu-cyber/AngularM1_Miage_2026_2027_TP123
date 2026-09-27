@@ -16,27 +16,30 @@
     <article class="card">
       <div class="row">
         <h2>Mes pistes</h2>
-        <button type="button" (click)="load()">Actualiser</button>
+        <button type="button" (click)="load()" [disabled]="loading()">Actualiser</button>
       </div>
       @if (loading()) {
-        <p>Chargement…</p>
-      }
-      @for (track of tracks(); track track.id) {
-        <div class="track">
-          <div>
-            <b>{{ track.title }}</b>
-            <small>{{ track.originalName }} · {{ track.size }} Ko</small>
+        <p role="status">Chargement…</p>
+      } @else if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      } @else {
+        @for (track of tracks(); track track.id) {
+          <div class="track">
+            <div>
+              <b>{{ track.title }}</b>
+              <small>{{ track.originalName }} · {{ track.size }} Ko</small>
+            </div>
+            <button type="button" (click)="play(track)" [attr.aria-label]="'Lire ' + track.title">▶</button>
           </div>
-          <button type="button" (click)="play(track)" [attr.aria-label]="'Lire ' + track.title">▶</button>
-        </div>
-      } @empty {
-        <p>Aucune piste.</p>
+        } @empty {
+          <p>Aucune piste.</p>
+        }
       }
-      <div class="pager">
-        <button type="button" (click)="go(page() - 1)" [disabled]="page() === 1">Préc.</button>
-        <span>Page {{ page() }} / {{ pages() }}</span>
-        <button type="button" (click)="go(page() + 1)" [disabled]="page() === pages()">Suiv.</button>
-      </div>
+      <nav class="pager" aria-label="Pagination des pistes">
+        <button type="button" (click)="go(page() - 1)" [disabled]="loading() || page() <= 1">Précédent</button>
+        <span aria-live="polite">Page {{ page() }} / {{ pages() }} · {{ total() }} piste(s)</span>
+        <button type="button" (click)="go(page() + 1)" [disabled]="loading() || page() >= pages()">Suivant</button>
+      </nav>
       @if (audioUrl()) {
         <audio [src]="audioUrl()" controls autoplay></audio>
       }
