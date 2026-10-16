@@ -94,3 +94,40 @@ Je peux faire le commit si tu veux (sans `SUJET_ETUDIANT_TP1.md`).
   - [lecture du profil](docs/captures/network-users-me-get.png)
   - [modification du profil](docs/captures/network-users-me-put.png)
 - **Ce que chaque membre sait maintenant expliquer sans l'agent :** _À compléter. Par exemple : le trajet d'une requête de connexion, le rôle de l'intercepteur et du guard, la différence entre Signal et `localStorage`, pourquoi un `401` au login ne déconnecte pas._
+
+# TP3 — Fiabilisation et enrichissement du frontend
+
+- **Prompt initial (session du 2026-10-02) :** *Tu peux analyser le projet frontend-starter et regarder ce qu'il reste à faire pour valider SUJET_ETUDIANT_TP3.md, et il faudra sûrement faire un LIVRABLES_TP3.md*
+- **Analyse de l'agent avant modification :** aucune mission du TP3 n'était commencée. `TrackService` n'avait pas de méthode `delete()`, les cards n'avaient pas de bouton de suppression, l'upload n'émettait que la réponse finale, aucun fichier `*.spec.ts` n'existait, et Angular Material (SnackBar) et `jsdom` (DOM des tests) n'étaient pas installés. Le build initial passait.
+
+## Mission 5 — Suppression d'une piste
+
+- **Objectif :** supprimer une piste depuis sa card avec confirmation, état anti-double-clic, SnackBar, rechargement et gestion du `404`.
+- **Plan proposé par l'agent :** ajouter `TrackService.delete()`, un `output remove` et un `input deleting` sur la card, puis `remove()` / `afterDelete()` dans `TracksPageComponent`. `404` et `500` rechargent la liste.
+- **Choix discutés :** `window.confirm` plutôt qu'un `MatDialog` (plus simple et facile à simuler dans les tests). Si on supprime la dernière piste d'une page > 1, on revient à la page précédente. Si la piste supprimée était en lecture, on arrête la lecture et on révoque l'`ObjectURL`.
+- **Fichiers modifiés :** `track.service.ts`, `track-card.{ts,html,css}`, `tracks-page.{ts,html}`, `angular.json` (thème Material), `package.json`.
+- **Vérifications par le binôme (2026-10-16) :** suppression faite dans le navigateur sur la piste `demo-tp3.wav` qui venait d'être envoyée. La confirmation s'affiche. Après « OK », l'onglet Network montre `DELETE /api/tracks/6ad211ad1bae019c285be71a` → `204 No Content`, avec le même `id` que dans la réponse de l'upload. La card disparaît de la liste après le rechargement. Capture : [network-tracks-delete-204.png](docs/captures/network-tracks-delete-204.png). Le cas « piste déjà supprimée » (`404`) n'a pas été testé avec deux onglets. Il est couvert par le test automatisé 14 et par l'appel `curl` du livrable (second `DELETE` → `404 Piste inconnue`).
+
+## Mission 6 — Progression de l'upload
+
+- **Objectif :** afficher les états aucun upload / en cours avec pourcentage / réussite / échec, et bloquer la double soumission.
+- **Plan proposé par l'agent :** `observe: 'events'` + `reportProgress: true` dans le service. Un seul Signal `uploadState` typé par une union discriminée (`upload-state.model.ts`) remplace `uploading`, `uploadError` et `uploadSuccess`, avec `uploading` en `computed`. Affichage avec `<progress>` et `@let` / `@if`.
+- **Proposition corrigée :** la première version du template utilisait un `@switch` avec des `@if` imbriqués pour retrouver le type de chaque état. Elle a été remplacée par une chaîne `@if / @else if` sur `state.status`, plus lisible.
+- **Fichiers modifiés :** `track.service.ts`, `upload-state.model.ts` (nouveau), `tracks-page.{ts,html,css}`.
+- **Vérifications par le binôme (2026-10-16) :** upload d'un fichier WAV de 5,3 Mo (`demo-tp3.wav`) dans le navigateur. `POST /api/tracks` → `201 Created`. La réponse contient la `Track` créée (`id`, `ownerId`, `mimeType: audio/wav`, `size: 5292044`). La piste apparaît ensuite dans la liste. Captures : [network-tracks-upload-progress.png](docs/captures/network-tracks-upload-progress.png) et [network-tracks-upload-response.png](docs/captures/network-tracks-upload-response.png). En local, l'envoi est presque instantané, donc la progression n'a pas été capturée à l'écran. Les étapes `0 %` → `42 %` → succès sont vérifiées par les tests automatisés 5 et 15.
+
+## Mission 7 — Tests automatisés
+
+- **Objectif :** au moins trois tests frontend qui vérifient URL, méthodes, paramètres, en-têtes et résultats simulés, sans backend.
+- **Plan proposé par l'agent :** 16 tests dans 5 fichiers (`AuthService`, `TrackService`, `authInterceptor`, `authGuard`, `TracksPageComponent`) avec `HttpTestingController`, plus 4 tests backend facultatifs (`401` ×2, `400` ×2) qui ne nécessitent pas MongoDB.
+- **Erreurs rencontrées et corrigées :**
+  - `ng test` cherchait une configuration `development` absente : ajout de `buildTarget: "gpc:build"` ;
+  - avec Node 26, `localStorage` était `undefined` dans les tests (le `localStorage` natif de Node masque celui de jsdom). Correction : un stockage en mémoire injecté avec `vi.stubGlobal` (`shared/testing/memory-storage.ts`) ;
+  - le test d'upload attendait `[UploadProgress, Response]`, mais Angular émet d'abord `Sent`. L'assertion a été corrigée et commentée.
+- **Preuve :** `16 passed (16)` côté frontend, `pass 6 fail 0` côté backend, `npm run build` réussi. Contre-vérification : remplacer `delete` par `post` dans le service fait échouer 2 tests. Détail dans [LIVRABLES_TP3.md](LIVRABLES_TP3.md).
+- **Ce que chaque membre sait maintenant expliquer sans l'agent :**
+  - le trajet d'une suppression : card → `(remove)` → `TracksPageComponent.remove()` → `TrackService.delete()` → intercepteur (JWT) → `DELETE /api/tracks/:id` → `204`, puis rechargement de la liste ;
+  - pourquoi le guard ne protège rien côté serveur : la sécurité réelle vient de `jwt.verify` et du filtre `{ _id, ownerId: req.auth.sub }`, qui renvoie `404` pour la piste d'un autre utilisateur ;
+  - la différence entre `observe: 'body'` (une seule valeur) et `observe: 'events'` (`Sent`, `UploadProgress`…, `Response`), et le calcul `Math.round(100 * loaded / total)` ;
+  - le rôle de `HttpTestingController` : `expectOne` vérifie l'URL et la méthode, `flush` et `event` simulent la réponse, `verify` détecte une requête en trop. C'est pour ça que les tests ne dépendent ni du backend ni de MongoDB ;
+  - la différence entre un test unitaire (une unité isolée, dépendances simulées) et un test d'intégration (plusieurs couches réelles ensemble).

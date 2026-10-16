@@ -16,3 +16,6 @@
 }
 
 .empty { grid-column: 1 / -1; color: #61756f; }
+
+.progress { display: grid; gap: 0.3rem; margin-top: 0.8rem; font-size: 0.9rem; }
+.progress progress { width: 100%; accent-color: #1d755e; }

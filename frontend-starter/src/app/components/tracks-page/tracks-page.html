@@ -29,11 +29,21 @@
       >
         {{ uploading() ? 'Envoi en cours…' : 'Envoyer' }}
       </button>
-      @if (uploadError()) {
-        <p class="error" role="alert">{{ uploadError() }}</p>
-      }
-      @if (uploadSuccess()) {
-        <p class="success" role="status">{{ uploadSuccess() }}</p>
+      @let state = uploadState();
+      @if (state.status === 'uploading') {
+        <div class="progress" role="status">
+          @if (state.progress !== null) {
+            <progress max="100" [value]="state.progress" aria-label="Progression de l'envoi"></progress>
+            <span>Envoi : {{ state.progress }} %</span>
+          } @else {
+            <progress aria-label="Progression de l'envoi"></progress>
+            <span>Envoi en cours…</span>
+          }
+        </div>
+      } @else if (state.status === 'success') {
+        <p class="success" role="status">« {{ state.track.title }} » a bien été ajoutée.</p>
+      } @else if (state.status === 'error') {
+        <p class="error" role="alert">{{ state.message }}</p>
       }
     </article>
 
@@ -67,7 +77,9 @@
                 [track]="track"
                 [playing]="currentTrack()?.id === track.id"
                 [busy]="loadingTrackId() === track.id"
+                [deleting]="deletingTrackId() === track.id"
                 (play)="play($event)"
+                (remove)="remove($event)"
               />
             </li>
           } @empty {

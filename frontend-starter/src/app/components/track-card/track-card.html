@@ -11,12 +11,24 @@
       </div>
     </dl>
   </div>
-  <button
-    type="button"
-    (click)="play.emit(track())"
-    [disabled]="busy()"
-    [attr.aria-label]="(playing() ? 'Relancer ' : 'Lire ') + track().title"
-  >
-    {{ busy() ? '…' : playing() ? '↻ En cours' : '▶ Lire' }}
-  </button>
+  <div class="actions">
+    <button
+      type="button"
+      (click)="play.emit(track())"
+      [disabled]="busy() || deleting()"
+      [attr.aria-label]="(playing() ? 'Relancer ' : 'Lire ') + track().title"
+    >
+      {{ busy() ? '…' : playing() ? '↻ En cours' : '▶ Lire' }}
+    </button>
+    <button
+      type="button"
+      class="danger"
+      (click)="remove.emit(track())"
+      [disabled]="deleting()"
+      [attr.aria-busy]="deleting()"
+      [attr.aria-label]="'Supprimer ' + track().title"
+    >
+      {{ deleting() ? 'Suppression…' : 'Supprimer' }}
+    </button>
+  </div>
 </article>

@@ -1,8 +1,10 @@
-import { Component, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
-import { HttpErrorResponse } from '@angular/common/http';
+import { Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
 import { Track } from '../../shared/models/track.model';
+import { UploadState } from '../../shared/models/upload-state.model';
 import { TrackService } from '../../shared/services/track.service';
 import { ALLOWED_AUDIO_TYPES, validateAudioFile } from '../../shared/utils/audio-file';
 import { TrackCardComponent } from '../track-card/track-card';
@@ -14,6 +16,7 @@ import { TrackCardComponent } from '../track-card/track-card';
 })
 export class TracksPageComponent {
   private readonly service = inject(TrackService);
+  private readonly snackBar = inject(MatSnackBar);
   private readonly fileInput = viewChild.required<ElementRef<HTMLInputElement>>('fileInput');
 
   /** Valeur de l'attribut `accept` : mêmes types MIME que le backend. */
@@ -29,19 +32,23 @@ export class TracksPageComponent {
 
   readonly title = new FormControl('', { nonNullable: true });
   readonly file = signal<File | null>(null);
-  readonly uploading = signal(false);
-  readonly uploadError = signal('');
-  readonly uploadSuccess = signal('');
+  readonly uploadState = signal<UploadState>({ status: 'idle' });
+  readonly uploading = computed(() => this.uploadState().status === 'uploading');
 
   readonly audioUrl = signal('');
   readonly currentTrack = signal<Track | null>(null);
   readonly loadingTrackId = signal('');
   readonly audioError = signal('');
 
+  /** Identifiant de la piste en cours de suppression ('' si aucune). */
+  readonly deletingTrackId = signal('');
+
   /** Requête de liste en cours, annulée si une nouvelle page est demandée entre-temps. */
   private listRequest?: Subscription;
   /** Téléchargement audio en cours, annulé si l'utilisateur choisit un autre morceau. */
   private audioRequest?: Subscription;
+  /** Upload en cours, annulé si l'utilisateur quitte la page. */
+  private uploadRequest?: Subscription;
 
   constructor() {
     this.load();
@@ -49,6 +56,7 @@ export class TracksPageComponent {
     // on libère la dernière URL quand l'utilisateur quitte la page.
     inject(DestroyRef).onDestroy(() => {
       this.audioRequest?.unsubscribe();
+      this.uploadRequest?.unsubscribe();
       this.revokeAudioUrl();
     });
   }
@@ -57,8 +65,8 @@ export class TracksPageComponent {
     const file = (event.target as HTMLInputElement).files?.[0] ?? null;
     console.debug('[TracksPage] Fichier sélectionné', file?.name, file?.type, file?.size);
     this.file.set(file);
-    this.uploadSuccess.set('');
-    this.uploadError.set(file ? validateAudioFile(file) : '');
+    const invalid = file ? validateAudioFile(file) : '';
+    this.uploadState.set(invalid ? { status: 'error', message: invalid } : { status: 'idle' });
   }
 
   /** Demande au serveur la page courante : aucune découpe locale n'est faite côté Angular. */
@@ -103,29 +111,34 @@ export class TracksPageComponent {
 
     const invalid = validateAudioFile(file);
     if (invalid) {
-      this.uploadError.set(invalid);
+      this.uploadState.set({ status: 'error', message: invalid });
       return;
     }
 
-    this.uploading.set(true);
-    this.uploadError.set('');
-    this.uploadSuccess.set('');
+    this.uploadState.set({ status: 'uploading', progress: 0 });
     this.title.disable();
 
-    this.service.upload(file, this.title.value.trim() || file.name).subscribe({
-      next: (track) => {
-        console.debug('[TracksPage] Piste envoyée', track.id);
-        this.uploading.set(false);
-        this.uploadSuccess.set(`« ${track.title} » a bien été ajoutée.`);
-        this.resetUploadForm();
-        this.page.set(1);
-        this.load();
+    // Avec observe: 'events', next() est appelé plusieurs fois : une fois par
+    // événement de progression, puis une dernière fois avec la réponse du serveur.
+    this.uploadRequest = this.service.upload(file, this.title.value.trim() || file.name).subscribe({
+      next: (event) => {
+        if (event.type === HttpEventType.UploadProgress) {
+          // event.total est absent si le navigateur ne connaît pas la taille du corps.
+          const progress = event.total ? Math.round((100 * event.loaded) / event.total) : null;
+          this.uploadState.set({ status: 'uploading', progress });
+        } else if (event.type === HttpEventType.Response && event.body) {
+          const track = event.body;
+          console.debug('[TracksPage] Piste envoyée', track.id);
+          this.uploadState.set({ status: 'success', track });
+          this.resetUploadForm();
+          this.page.set(1);
+          this.load();
+        }
       },
       error: (error: HttpErrorResponse) => {
         console.error('[TracksPage] Envoi impossible', error);
-        this.uploading.set(false);
         this.title.enable();
-        this.uploadError.set(this.uploadErrorMessage(error));
+        this.uploadState.set({ status: 'error', message: this.uploadErrorMessage(error) });
       },
     });
   }
@@ -142,6 +155,59 @@ export class TracksPageComponent {
     if (error.status === 401) return 'Session expirée. Veuillez vous reconnecter.';
     const message = error.error?.message ?? "L'envoi a échoué.";
     return error.status === 400 ? `Fichier refusé par le serveur : ${message}` : message;
+  }
+
+  /**
+   * Supprime une piste après confirmation. Le composant ne connaît pas HttpClient :
+   * l'appel passe par TrackService. C'est le backend qui vérifie le JWT et le propriétaire.
+   */
+  remove(track: Track): void {
+    // Une seule suppression à la fois : protège contre les doubles clics.
+    if (this.deletingTrackId()) return;
+    if (!window.confirm(`Supprimer « ${track.title} » ? Cette action est définitive.`)) return;
+
+    this.deletingTrackId.set(track.id);
+    this.service.delete(track.id).subscribe({
+      next: () => {
+        console.debug('[TracksPage] Piste supprimée', track.id);
+        this.deletingTrackId.set('');
+        this.snackBar.open(`« ${track.title} » a été supprimée.`, 'OK', { duration: 4000 });
+        this.afterDelete(track);
+      },
+      error: (error: HttpErrorResponse) => {
+        console.error('[TracksPage] Suppression impossible', error);
+        this.deletingTrackId.set('');
+        this.snackBar.open(this.deleteErrorMessage(error, track), 'Fermer', { duration: 6000 });
+        // 404 : la piste a déjà disparu (autre onglet) ou n'appartient pas à l'utilisateur.
+        // 500 : la métadonnée est supprimée mais pas le fichier. Dans les deux cas,
+        // la liste affichée n'est plus fiable : on la recharge.
+        if (error.status === 404 || error.status === 500) this.afterDelete(track);
+      },
+    });
+  }
+
+  /** Arrête la lecture de la piste supprimée et recharge la page courante. */
+  private afterDelete(track: Track): void {
+    if (this.loadingTrackId() === track.id) {
+      this.audioRequest?.unsubscribe();
+      this.loadingTrackId.set('');
+    }
+    if (this.currentTrack()?.id === track.id) {
+      this.revokeAudioUrl();
+      this.currentTrack.set(null);
+    }
+    // Si c'était la dernière piste de la page, on recule d'une page.
+    if (this.tracks().length === 1 && this.page() > 1) this.page.update((page) => page - 1);
+    this.load();
+  }
+
+  private deleteErrorMessage(error: HttpErrorResponse, track: Track): string {
+    if (error.status === 0) return 'Serveur injoignable. La piste n\'a pas été supprimée.';
+    if (error.status === 401) return 'Session expirée. Veuillez vous reconnecter.';
+    if (error.status === 404) {
+      return `« ${track.title} » n'existe plus ou ne vous appartient pas. La liste a été actualisée.`;
+    }
+    return error.error?.message ?? `Impossible de supprimer « ${track.title} ».`;
   }
 
   play(track: Track): void {

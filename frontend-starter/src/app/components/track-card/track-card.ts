@@ -3,7 +3,7 @@ import { DatePipe } from '@angular/common';
 import { Track } from '../../shared/models/track.model';
 import { formatLabel, formatSize } from '../../shared/utils/audio-file';
 
-/** Card d'une piste : métadonnées et action de lecture. */
+/** Card d'une piste : métadonnées, lecture et suppression. */
 @Component({
   selector: 'app-track-card',
   imports: [DatePipe],
@@ -14,7 +14,10 @@ export class TrackCardComponent {
   readonly track = input.required<Track>();
   readonly playing = input(false);
   readonly busy = input(false);
+  /** Vrai pendant la requête DELETE de cette piste : bloque les doubles clics. */
+  readonly deleting = input(false);
   readonly play = output<Track>();
+  readonly remove = output<Track>();
 
   readonly size = computed(() => formatSize(this.track().size));
   readonly format = computed(() => formatLabel(this.track().mimeType));

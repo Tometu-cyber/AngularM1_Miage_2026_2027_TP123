@@ -53,3 +53,7 @@ dd { margin: 0; }
 }
 
 button:focus-visible { outline: 3px solid #123d32; outline-offset: 2px; }
+
+.actions { display: flex; gap: 0.5rem; }
+.actions button { flex: 1; }
+.danger { color: #a33; background: #fbeaea; }

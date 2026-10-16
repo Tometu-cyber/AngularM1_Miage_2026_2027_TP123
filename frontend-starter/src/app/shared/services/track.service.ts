@@ -14,16 +14,28 @@ export class TrackService {
     });
   }
 
+  /**
+   * `observe: 'events'` + `reportProgress: true` : l'Observable émet chaque
+   * HttpEvent (Sent, UploadProgress…, Response) au lieu de la seule réponse finale.
+   */
   upload(file: File, title: string) {
     const body = new FormData();
     body.append('audio', file);
     body.append('title', title);
-    return this.http.post<Track>('/api/tracks', body);
+    return this.http.post<Track>('/api/tracks', body, {
+      observe: 'events',
+      reportProgress: true,
+    });
   }
 
   audio(id: string) {
     return this.http.get(`/api/tracks/${id}/audio`, {
       responseType: 'blob',
     });
+  }
+
+  /** Le backend répond `204` sans corps, ou `404` si la piste n'existe plus ou appartient à un autre utilisateur. */
+  delete(id: string) {
+    return this.http.delete<void>(`/api/tracks/${id}`);
   }
 }
